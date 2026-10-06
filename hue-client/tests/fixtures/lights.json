@@ -1,0 +1,27 @@
+{
+  "errors": [],
+  "data": [
+    {
+      "id": "3f1c9a2e-0d6b-4c55-9e1a-7b2f4d8c6a01",
+      "id_v1": "/lights/1",
+      "owner": { "rid": "9a7d1e40-55c2-4b8e-a0f3-2c6e8b1d4f77", "rtype": "device" },
+      "metadata": { "name": "Desk lamp", "archetype": "classic_bulb" },
+      "on": { "on": true },
+      "dimming": { "brightness": 62.5, "min_dim_level": 0.2 },
+      "color_temperature": {
+        "mirek": 366,
+        "mirek_valid": true,
+        "mirek_schema": { "mirek_minimum": 153, "mirek_maximum": 500 }
+      },
+      "type": "light"
+    },
+    {
+      "id": "b8e2d4f6-1a3c-4e5b-8d7f-9c0a2b4d6e88",
+      "id_v1": "/lights/2",
+      "owner": { "rid": "c4e6a8b0-2d4f-4a6c-9e8b-0d2f4a6c8e00", "rtype": "device" },
+      "metadata": { "name": "Plug", "archetype": "plug" },
+      "on": { "on": false },
+      "type": "light"
+    }
+  ]
+}

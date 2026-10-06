@@ -1,0 +1,6 @@
+# Host-side crates share one workspace (one Cargo.lock, one target/ dir).
+# firmware/ is excluded: it builds for thumbv6m-none-eabi with its own config.
+[workspace]
+resolver = "3"
+members = ["hue-client"]
+exclude = ["firmware"]
