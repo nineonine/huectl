@@ -58,6 +58,8 @@ echo quit >&3; exec 3>&-; wait || true
 
 sudo rmmod huectl
 echo "==> dmesg"; sudo dmesg
-echo "==> evtest (/dev/input/${ev:-none})"
+echo "==> evtest capabilities (/dev/input/${ev:-none})"
+sed -n '/^Supported events/,/^Properties/p' /tmp/evtest.log | grep -vE '^(Supported|Properties)'
+echo "==> evtest events"
 grep -E '^Event:' /tmp/evtest.log | grep -v SYN_REPORT || echo "(no events)"
 EOF

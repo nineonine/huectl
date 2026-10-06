@@ -49,7 +49,7 @@ into design discussions, so keep it accurate and short.
 - [x] DRAFT report descriptor in `tools/fake-pico/src/descriptor.rs`: report 1 in = 4 buttons + Dial (rel, i8) + Slider (abs, u16); report 2 out = vendor LED byte. Moves to the firmware later (decision 4).
 
 - [x] Driver step 1: `driver/huectl.c` claims 1209:0001 (beats hid-generic), logs raw reports via `raw_event`, keeps generic input mapping (`HID_CONNECT_DEFAULT`). Test loop: `tools/vm.sh start`, then `distrobox enter dev -- tools/test-driver.sh`. VM snapshot `pre-driver` taken first.
-- [ ] Driver step 2: own input mapping (decide event codes for encoder/slider/buttons).
+- [x] Driver step 2: own `input_mapping`: encoder push + buttons -> `BTN_0..BTN_3`, encoder -> `REL_DIAL`, slider -> `ABS_MISC` (0..1023 from descriptor), everything else ignored. Verified with evtest.
 - [ ] Driver step 3: `led_classdev` -> output report 2 (fake-pico prints it).
 
 ## Decisions log
@@ -68,6 +68,7 @@ into design discussions, so keep it accurate and short.
 | 2026-10-05 | Kernel code licensed `Dual MIT/GPL` | Repo is MIT; kernel needs GPL-compatible to use GPL-only symbols |
 | 2026-10-05 | `hue-client::Bridge` takes a caller-built `reqwest::Client` | TLS pinning decided in one place; tests use plain HTTP |
 | 2026-10-05 | Draft descriptor uses Generic Desktop / Multi-axis Controller app collection | Only some application usages get hid-input mapping; this one gives `BTN_0..` buttons (not mouse/joystick ones) |
+| 2026-10-05 | Driver pins event codes: `BTN_0..3`, `REL_DIAL`, `ABS_MISC`; unmapped usages ignored | Contract with the daemon lives in our code, not hid-input guesses; `BTN_*` not `KEY_*` so desktops don't treat it as a keyboard |
 | 2026-10-05 | `cargo install` tools only inside `dev` | Linked against Debian glibc 2.36, they also run on the newer-glibc host |
 
 ## Open questions
@@ -100,3 +101,4 @@ TBD. Create `docs/pinmap.md` when the hardware arrives.
 - Binaries built in `dev` (Debian 12) run in the VM (Debian 12) as is: same glibc.
 - Inspect how the kernel parsed a descriptor: `sudo cat /sys/kernel/debug/hid/<bus:vid:pid.N>/rdesc`.
 - `insmod` doesn't load dependencies: our module needs `hid.ko`, so `modprobe -a hid uhid` first, or it fails with "Unknown symbol hid_hw_start". (`modprobe` would resolve it, but only finds modules installed under `/lib/modules`.)
+- HID core emits `EV_MSC/MSC_SCAN` (value = raw usage, e.g. `0x90001` = Button 1) before each key event. Daemon ignores it.
