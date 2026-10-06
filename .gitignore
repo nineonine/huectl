@@ -26,3 +26,6 @@ config.toml
 *.swp
 .vscode/
 .idea/
+
+# Kernel dev VM: disk images, SSH key, logs (tools/vm.sh)
+vm/
