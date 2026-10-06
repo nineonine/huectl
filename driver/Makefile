@@ -4,7 +4,7 @@
 # system (kbuild) from the headers dir, which reads `obj-m` below to learn
 # which modules to build from this directory.
 
-obj-m += hello.o
+obj-m += hello.o huectl.o
 
 KDIR ?= /lib/modules/$(shell uname -r)/build
 

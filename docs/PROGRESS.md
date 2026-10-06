@@ -48,6 +48,10 @@ into design discussions, so keep it accurate and short.
 - [x] `tools/fake-pico`: virtual controller via `/dev/uhid`, driven by stdin (`press N`, `release N`, `turn D`, `slide V`). Verified in the VM: `hid-generic` binds and `evtest` shows `BTN_0..3`, `REL_DIAL`, `ABS_THROTTLE` (0..1023).
 - [x] DRAFT report descriptor in `tools/fake-pico/src/descriptor.rs`: report 1 in = 4 buttons + Dial (rel, i8) + Slider (abs, u16); report 2 out = vendor LED byte. Moves to the firmware later (decision 4).
 
+- [x] Driver step 1: `driver/huectl.c` claims 1209:0001 (beats hid-generic), logs raw reports via `raw_event`, keeps generic input mapping (`HID_CONNECT_DEFAULT`). Test loop: `tools/vm.sh start`, then `distrobox enter dev -- tools/test-driver.sh`. VM snapshot `pre-driver` taken first.
+- [ ] Driver step 2: own input mapping (decide event codes for encoder/slider/buttons).
+- [ ] Driver step 3: `led_classdev` -> output report 2 (fake-pico prints it).
+
 ## Decisions log
 
 | Date | Decision | Why |
@@ -95,3 +99,4 @@ TBD. Create `docs/pinmap.md` when the hardware arrives.
 - serde: `#[serde(default)]` on a generic `Vec<T>` field demands `T: Default`; use `default = "Vec::new"`.
 - Binaries built in `dev` (Debian 12) run in the VM (Debian 12) as is: same glibc.
 - Inspect how the kernel parsed a descriptor: `sudo cat /sys/kernel/debug/hid/<bus:vid:pid.N>/rdesc`.
+- `insmod` doesn't load dependencies: our module needs `hid.ko`, so `modprobe -a hid uhid` first, or it fails with "Unknown symbol hid_hw_start". (`modprobe` would resolve it, but only finds modules installed under `/lib/modules`.)
