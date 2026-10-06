@@ -25,15 +25,15 @@ into design discussions, so keep it accurate and short.
   *Done when:* `tools/prep-deck.sh` exits 0.
 - [x] **Step 2: Dev container.** (Rust 1.99, probe-rs 0.32.0, elf2uf2-rs, flip-link 0.1.12; tools also run on host) `distrobox create -n dev -i debian:12`; inside it install `build-essential git curl pkg-config libssl-dev libudev-dev`, rustup, `rustup target add thumbv6m-none-eabi`, `cargo install probe-rs-tools elf2uf2-rs flip-link`.
   *Done when:* `cargo --version` and `probe-rs --version` work inside `dev`.
-- [ ] **Step 3: Hue Bridge via curl.** Find bridge IP, press link button and request an application key, list lights, toggle one, change brightness.
+- [ ] **Step 3: Hue Bridge via curl.** (Blocked: no bridge yet.) Find bridge IP, press link button and request an application key, list lights, toggle one, change brightness.
   *Done when:* a bulb can be switched and dimmed from a shell. Key stored outside the repo.
 - [x] **Step 4: Kernel dev VM.** Scripted: `distrobox enter dev -- tools/vm.sh create|start|ssh|stop|snapshot|restore|snapshots`. Debian 12 cloud image + cloud-init (no installer), files in `vm/` (gitignored), snapshot `clean`. Kernel 6.1.0-53-amd64, SeaBIOS (no Secure Boot). QEMU/KVM Debian 12 (4 GB RAM, 4 vCPU, 30 GB qcow2), SSH on host port 2222, install `build-essential linux-headers-$(uname -r) git usbutils evtest`. Take a clean snapshot with the VM powered off.
   *Done when:* SSH works and `/lib/modules/$(uname -r)/build` exists.
 - [x] **Step 5: Hello-world module.** `driver/hello.c` loads/unloads in the VM; `Dual MIT/GPL` license. `hello.c` with init/exit `pr_info`, `MODULE_LICENSE("GPL")`, Makefile with `obj-m`. `make`, `insmod`, check `dmesg`, `rmmod`.
   *Done when:* load and unload messages appear in `dmesg`. Keep `dmesg -w` open in a second SSH session.
-- [ ] **Step 6: Firmware toolchain smoke test.** (Blocked: auto mode won't let Claude build a freshly cloned external repo; owner runs it. Use `cargo +stable` to skip Embassy's pinned 1.97 + 14 targets.) Clone `embassy-rs/embassy`, build `examples/rp` `blinky` in release mode. Flash and see the LED blink once the board arrives (BOOTSEL + `elf2uf2-rs -d`).
+- [~] **Step 6: Firmware toolchain smoke test.** Build half done: `blinky` builds with `cargo +stable build --release --bin blinky` (`+stable` skips Embassy's pinned 1.97 + 14 targets) and converts to a 31 KB `.uf2`. Flashing waits for the board. Clone `embassy-rs/embassy`, build `examples/rp` `blinky` in release mode. Flash and see the LED blink once the board arrives (BOOTSEL + `elf2uf2-rs -d`).
   *Done when:* build succeeds now; LED blinks later.
-- [ ] **Step 7: Repo skeleton.** Create the layout from `CLAUDE.md`, `git init`, `.gitignore` for `target/` and `*.ko` build output, commit the hello module under `driver/`. (`git init` + `.gitignore` + hello module done; repo is **public** (not private as intended), push pending owner's call; origin = `https://github.com/nineonine/huectl` (private); push auth not set up yet.)
+- [ ] **Step 7: Repo skeleton.** Create the layout from `CLAUDE.md`, `git init`, `.gitignore` for `target/` and `*.ko` build output, commit the hello module under `driver/`. (`git init` + `.gitignore` + hello module done; repo is public (owner OK'd), pushed; origin = `https://github.com/nineonine/huectl` (private); push auth not set up yet.)
   *Done when:* first commit exists.
 
 ## Phase 1 preview (no hardware needed)
