@@ -1,0 +1,28 @@
+# Rust
+target/
+
+# Kernel module build output
+*.ko
+*.o
+*.mod
+*.mod.c
+*.cmd
+.*.cmd
+*.symvers
+*.order
+.tmp_versions/
+
+# VM disk images (large, machine-specific)
+*.qcow2
+*.img
+*.iso
+
+# Secrets: the Hue application key lives in ~/.config/huectl/, never here
+config.toml
+!.cargo/config.toml
+*.key
+
+# Editors
+*.swp
+.vscode/
+.idea/
