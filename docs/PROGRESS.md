@@ -38,10 +38,15 @@ into design discussions, so keep it accurate and short.
 
 ## Phase 1 preview (no hardware needed)
 
-- [ ] `hue-client` crate: discover bridge, list lights, set on/off and brightness, with tests, verified against the real bridge
+- [~] `hue-client` crate: list lights, set on/off and brightness, tested against a wiremock fake (7 tests). Still to do: discovery, pairing, and checking shapes against a real bridge (replace `tests/fixtures/lights.json` with a capture).
 - [ ] Pinned-certificate handling for the bridge's self-signed cert
 - [ ] Toy daemon: keyboard events (evdev) -> Hue commands, with ~100 ms coalescing
 - [ ] Config file loading (bridge IP, application key path)
+
+## Ahead of Phase 3 (no hardware needed)
+
+- [x] `tools/fake-pico`: virtual controller via `/dev/uhid`, driven by stdin (`press N`, `release N`, `turn D`, `slide V`). Verified in the VM: `hid-generic` binds and `evtest` shows `BTN_0..3`, `REL_DIAL`, `ABS_THROTTLE` (0..1023).
+- [x] DRAFT report descriptor in `tools/fake-pico/src/descriptor.rs`: report 1 in = 4 buttons + Dial (rel, i8) + Slider (abs, u16); report 2 out = vendor LED byte. Moves to the firmware later (decision 4).
 
 ## Decisions log
 
@@ -57,6 +62,8 @@ into design discussions, so keep it accurate and short.
 | 2026-10-05 | VM from Debian cloud image + cloud-init NoCloud seed over HTTP | Scriptable, reproducible, no installer clicking |
 | 2026-10-05 | VM files live in repo `vm/` (gitignored), dedicated SSH key there | Keeps everything inside the repo, nothing in `~/.ssh` |
 | 2026-10-05 | Kernel code licensed `Dual MIT/GPL` | Repo is MIT; kernel needs GPL-compatible to use GPL-only symbols |
+| 2026-10-05 | `hue-client::Bridge` takes a caller-built `reqwest::Client` | TLS pinning decided in one place; tests use plain HTTP |
+| 2026-10-05 | Draft descriptor uses Generic Desktop / Multi-axis Controller app collection | Only some application usages get hid-input mapping; this one gives `BTN_0..` buttons (not mouse/joystick ones) |
 | 2026-10-05 | `cargo install` tools only inside `dev` | Linked against Debian glibc 2.36, they also run on the newer-glibc host |
 
 ## Open questions
@@ -84,3 +91,7 @@ TBD. Create `docs/pinmap.md` when the hardware arrives.
 - `gh` exists only in `dev`, so `git push` works only from inside `dev`.
 - In the VM, `modinfo`/`insmod` live in `/sbin` (not on a normal user's PATH).
 - Expected on insmod: "out-of-tree module taints kernel" and "signature ... missing". Fine without Secure Boot.
+- reqwest 0.13 renamed the TLS feature: `rustls` (not `rustls-tls`).
+- serde: `#[serde(default)]` on a generic `Vec<T>` field demands `T: Default`; use `default = "Vec::new"`.
+- Binaries built in `dev` (Debian 12) run in the VM (Debian 12) as is: same glibc.
+- Inspect how the kernel parsed a descriptor: `sudo cat /sys/kernel/debug/hid/<bus:vid:pid.N>/rdesc`.
