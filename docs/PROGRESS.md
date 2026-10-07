@@ -4,7 +4,7 @@ Update this file at the end of every work block. It is also what gets pasted
 into design discussions, so keep it accurate and short.
 
 **Current phase:** 0 (setup)
-**Hardware arrived:** no. Being ordered 2026-10-06: Pico H (spare undecided; a Pico starter kit may replace breadboard/jumpers/cable/LEDs/buttons/resistors), Debug Probe, KY-040 5-pack, slide pot, ST7789 color display, Zigbee dongle, USB extension cable, powered USB-C hub, Hue bulb. Source of truth: Google Sheet `hue_controller_hardware_list`
+**Hardware arrived:** no. Being ordered 2026-10-06: CanaKit Pico H Starter Kit (Pico H, breadboard, jumpers, micro-USB cable, LEDs, buttons, resistors), Debug Probe, KY-040 5-pack, ST7789 color display, Zigbee dongle, USB extension cable, multimeter. Undecided: spare Pico H, slide pot. Already owned (not ordered): USB-C hub, Hue bulb(s). Source of truth: Google Sheet `hue_controller_hardware_list`
 **Last updated:** 2026-10-06
 
 ## Phase overview

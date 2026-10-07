@@ -58,8 +58,9 @@ Pico H (RP2040; second board as a spare is undecided), Raspberry Pi Debug Probe 
 (5-pack; 3 used), 10k linear slide pot, tactile buttons, LEDs + 220-330 ohm
 resistors, breadboard, ST7789 240x240 SPI color display (1.3-1.54").
 Zigbee coordinator USB dongle (Sonoff ZBDongle-P or -E; confirm the exact model
-on arrival), USB 2.0 extension cable for it, powered USB-C hub (the Deck has
-one USB-C port). Full list with prices: Google Sheet
+on arrival), USB 2.0 extension cable for it, USB-C hub (owned; the Deck has
+one USB-C port). Breadboard, jumpers, LEDs, buttons and resistors come from a
+CanaKit Pico H Starter Kit (resistors are likely 220 ohm, fine for LEDs at 3.3 V). Full list with prices: Google Sheet
 `hue_controller_hardware_list` (owner's Drive).
 
 ## Repo layout
