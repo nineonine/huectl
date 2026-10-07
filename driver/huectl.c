@@ -32,15 +32,19 @@ static int huectl_raw_event(struct hid_device *hdev, struct hid_report *report,
 /*
  * The event codes below are the driver's contract with the daemon.
  *
- *   Button 1 (encoder push)  -> EV_KEY BTN_0
- *   Buttons 2-4              -> EV_KEY BTN_1..BTN_3
- *   Dial (encoder, relative) -> EV_REL REL_DIAL
- *   Slider (pot, 0..1023)    -> EV_ABS ABS_MISC
+ *   Buttons 1-3 (knob pushes)   -> EV_KEY BTN_0..BTN_2
+ *   Buttons 4-6 (tactile)       -> EV_KEY BTN_3..BTN_5
+ *   Rx, Ry, Rz (knobs 1-3, rel) -> EV_REL REL_RX, REL_RY, REL_RZ
+ *   Slider (pot, 0..1023)       -> EV_ABS ABS_MISC
  *
+ * Which knob means brightness, hue or saturation is the daemon's business
+ * (docs/report-descriptor.md); the driver only reports "knob N moved".
  * BTN_* rather than KEY_*: a desktop would treat KEY_* as a keyboard and
  * could act on the presses.
  */
-static const unsigned int huectl_buttons[] = { BTN_0, BTN_1, BTN_2, BTN_3 };
+static const unsigned int huectl_buttons[] = {
+	BTN_0, BTN_1, BTN_2, BTN_3, BTN_4, BTN_5,
+};
 
 /*
  * Called once per usage in the descriptor while the input device is being
@@ -56,8 +60,14 @@ static int huectl_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 	unsigned int id = usage->hid & HID_USAGE;
 
 	switch (usage->hid) {
-	case HID_GD_DIAL:
-		hid_map_usage(hi, usage, bit, max, EV_REL, REL_DIAL);
+	case HID_GD_RX:
+		hid_map_usage(hi, usage, bit, max, EV_REL, REL_RX);
+		return 1;
+	case HID_GD_RY:
+		hid_map_usage(hi, usage, bit, max, EV_REL, REL_RY);
+		return 1;
+	case HID_GD_RZ:
+		hid_map_usage(hi, usage, bit, max, EV_REL, REL_RZ);
 		return 1;
 	case HID_GD_SLIDER:
 		hid_map_usage(hi, usage, bit, max, EV_ABS, ABS_MISC);
@@ -69,7 +79,7 @@ static int huectl_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 		return 1;
 	}
 
-	/* E.g. the vendor-defined LED usage: not an input event. */
+	/* E.g. the vendor-defined LED and display usages: not input events. */
 	return -1;
 }
 

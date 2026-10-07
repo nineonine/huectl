@@ -50,9 +50,18 @@ if [ -n "$ev" ]; then
     sudo timeout 3 evtest "/dev/input/$ev" > /tmp/evtest.log 2>&1 &
     sleep 1
 fi
-for c in "press 1" "release 1" "turn 3" "turn -2" "slide 512"; do
+for c in "press 1" "release 1" "press 6" "release 6" \
+         "turn 1 3" "turn 2 -2" "turn 3 5" "slide 512"; do
     echo "$c" >&3; sleep 0.2
 done
+
+# Output path via hidraw (no driver code needed): LED report 2, then
+# display report 3 = on+color, focus hue, bri 200, sat 80, hue 212,
+# ct 366, swatch #3388ff. fake-pico should print both decoded.
+hidraw=$(ls "$hid/hidraw/" | head -1)
+echo "==> writing output reports to /dev/$hidraw"
+sudo sh -c "printf '\002\005' > /dev/$hidraw"
+sudo sh -c "printf '\003\003\002\310\120\324\000\156\001\063\210\377' > /dev/$hidraw"
 sleep 2
 echo quit >&3; exec 3>&-; wait || true
 
@@ -62,4 +71,6 @@ echo "==> evtest capabilities (/dev/input/${ev:-none})"
 sed -n '/^Supported events/,/^Properties/p' /tmp/evtest.log | grep -vE '^(Supported|Properties)'
 echo "==> evtest events"
 grep -E '^Event:' /tmp/evtest.log | grep -v SYN_REPORT || echo "(no events)"
+echo "==> fake-pico output reports received"
+grep 'kernel -> device: \(LEDs\|display\|unknown\)' /tmp/fake.log || echo "(none)"
 EOF

@@ -49,6 +49,7 @@ into design discussions, so keep it accurate and short.
 
 - [x] Driver step 1: `driver/huectl.c` claims 1209:0001 (beats hid-generic), logs raw reports via `raw_event`, keeps generic input mapping (`HID_CONNECT_DEFAULT`). Test loop: `tools/vm.sh start`, then `distrobox enter dev -- tools/test-driver.sh`. VM snapshot `pre-driver` taken first.
 - [x] Driver step 2: own `input_mapping`: encoder push + buttons -> `BTN_0..BTN_3`, encoder -> `REL_DIAL`, slider -> `ABS_MISC` (0..1023 from descriptor), everything else ignored. Verified with evtest.
+- [x] Descriptor v2 (spec: `docs/report-descriptor.md`): 6 buttons (3 knob pushes + 3 tactile), 3 relative knobs (Rx/Ry/Rz -> `REL_RX/RY/RZ`), slider; output report 2 (LEDs) and new report 3 (display state, 12 bytes). fake-pico, driver mapping and test script updated; verified in the VM incl. kernel's parse (ct range 153..500) and output reports via `/dev/hidraw`.
 - [ ] Driver step 3: `led_classdev` -> output report 2 (fake-pico prints it).
 
 ## Decisions log
@@ -71,14 +72,15 @@ into design discussions, so keep it accurate and short.
 | 2026-10-05 | Driver pins event codes: `BTN_0..3`, `REL_DIAL`, `ABS_MISC`; unmapped usages ignored | Contract with the daemon lives in our code, not hid-input guesses; `BTN_*` not `KEY_*` so desktops don't treat it as a keyboard |
 | 2026-10-06 | Color via two encoders: hue (wraps 0-360) + saturation; third encoder = brightness (CLAUDE.md decision 9) | Uses parts already in the plan; maps 1:1 to zigbee2mqtt `hue_step` / saturation. Owner picked this over a round trackpad or touchscreen for now |
 | 2026-10-06 | ST7789 240x240 color display shows tuned values + color swatch; daemon sends values, firmware draws (decision 10) | Color swatch beats mono SSD1306 for picking colors; keeps firmware free of Hue knowledge |
+| 2026-10-06 | Knobs use HID Rx/Ry/Rz -> `REL_RX/RY/RZ` (replaces `REL_DIAL` from 2026-10-05); 6 buttons `BTN_0..5` | Three identical knobs as one code family; nothing consumed `REL_DIAL` yet |
+| 2026-10-06 | Display report 3 carries the full state incl. a daemon-computed RGB swatch | Idempotent (decision 3); firmware never converts colors |
 | 2026-10-05 | `cargo install` tools only inside `dev` | Linked against Debian glibc 2.36, they also run on the newer-glibc host |
 
 ## Open questions
 
 - Slide pot "pickup" behavior: ignore until it crosses the bulb value, or jump?
 - What does each control do? Decided: encoders = brightness, hue, saturation. Still open: encoder pushes (on/off? reset?), slider (color temperature?), buttons 2-4 (presets?), LEDs (how many, what they show).
-- Display report: how does the daemon send it? `/dev/hidraw` (no driver code) or a driver sysfs attribute (more kernel practice)? And its layout (mode + hue/sat/bri/color-temp values).
-- Report descriptor must grow: 3 relative encoder axes instead of 1 (e.g. Dial + 2 more usages), 3 encoder push buttons, and the display output report. Update `fake-pico` and the driver mapping together.
+- Display report transport: `/dev/hidraw` (verified working in the VM, no driver code) or a driver sysfs attribute (more kernel practice)? Layout is decided (`docs/report-descriptor.md`).
 - Control a single bulb, a room/group, or switchable targets?
 - Which Zigbee dongle exactly was ordered (ZBDongle-P = zigbee2mqtt adapter `zstack`, ZBDongle-E = `ember`)? Confirm on arrival; it sets the zigbee2mqtt config.
 - Which bulbs, how many? Bluetooth-capable (easier factory reset via Hue BT app)?
@@ -114,3 +116,4 @@ TBD. Create `docs/pinmap.md` when the hardware arrives.
 - Inspect how the kernel parsed a descriptor: `sudo cat /sys/kernel/debug/hid/<bus:vid:pid.N>/rdesc`.
 - `insmod` doesn't load dependencies: our module needs `hid.ko`, so `modprobe -a hid uhid` first, or it fails with "Unknown symbol hid_hw_start". (`modprobe` would resolve it, but only finds modules installed under `/lib/modules`.)
 - HID core emits `EV_MSC/MSC_SCAN` (value = raw usage, e.g. `0x90001` = Button 1) before each key event. Daemon ignores it.
+- HID descriptor item data is signed: 153 as a 1-byte Logical Minimum (`0x15 0x99`) reads as -103. Use the 2-byte form (`0x16 0x99 0x00`). Check with debugfs `rdesc`.

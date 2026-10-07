@@ -6,13 +6,13 @@
 //!
 //! Run in the VM as root (/dev/uhid is root-only). Commands on stdin:
 //!
-//!   press N | release N   button N (1-4) down/up; 1 = encoder push
-//!   turn D                encoder moved D detents (-127..127)
+//!   press N | release N   button N (1-6) down/up; 1-3 = knob pushes
+//!   turn K D              knob K (1-3) moved D detents (-127..127)
 //!   slide V               slide pot at V (0..1023)
 //!   quit                  (or end of input)
 //!
-//! Kernel events (driver bound, device opened, LED output reports) are
-//! printed to stderr as they happen.
+//! Kernel events (driver bound, device opened, LED and display output
+//! reports, decoded) are printed to stderr as they happen.
 
 mod descriptor;
 mod uhid;
@@ -21,8 +21,8 @@ use std::io::{self, BufRead};
 use std::process::ExitCode;
 use std::thread;
 
-use descriptor::{Controls, REPORT_DESCRIPTOR};
-use uhid::{Device, DeviceInfo};
+use descriptor::{Controls, REPORT_DESCRIPTOR, describe_output};
+use uhid::{Device, DeviceInfo, Event};
 
 fn main() -> ExitCode {
     match run() {
@@ -47,6 +47,9 @@ fn run() -> io::Result<()> {
     thread::spawn(move || {
         loop {
             match events.next() {
+                Ok(Event::Output { data, .. }) => {
+                    eprintln!("kernel -> device: {}", describe_output(&data))
+                }
                 Ok(ev) => eprintln!("kernel -> device: {ev:?}"),
                 Err(e) => {
                     eprintln!("fake-pico: reading events: {e}");
@@ -70,7 +73,7 @@ fn run() -> io::Result<()> {
         let report = controls.report();
         dev.send_input(&report)?;
         eprintln!("device -> kernel: {report:02x?}");
-        controls.dial = 0; // relative: each turn is reported exactly once
+        controls.knobs = [0; 3]; // relative: each turn is reported exactly once
     }
     Ok(())
 }
@@ -82,7 +85,9 @@ fn apply(controls: &mut Controls, line: &str) -> Result<Option<()>, String> {
         ["quit"] => return Ok(None),
         ["press", n] => controls.buttons |= button_bit(n)?,
         ["release", n] => controls.buttons &= !button_bit(n)?,
-        ["turn", d] => controls.dial = parse_in(d, -127, 127)? as i8,
+        ["turn", k, d] => {
+            controls.knobs[parse_in(k, 1, 3)? as usize - 1] = parse_in(d, -127, 127)? as i8
+        }
         ["slide", v] => controls.slider = parse_in(v, 0, 1023)? as u16,
         _ => return Err(format!("unknown command: {line:?}")),
     }
@@ -90,7 +95,7 @@ fn apply(controls: &mut Controls, line: &str) -> Result<Option<()>, String> {
 }
 
 fn button_bit(n: &str) -> Result<u8, String> {
-    Ok(1 << (parse_in(n, 1, 4)? - 1))
+    Ok(1 << (parse_in(n, 1, 6)? - 1))
 }
 
 fn parse_in(s: &str, min: i32, max: i32) -> Result<i32, String> {
