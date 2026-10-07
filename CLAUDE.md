@@ -55,7 +55,10 @@ Division of responsibility:
 Pico H x2 (RP2040), Raspberry Pi Debug Probe (SWD), KY-040 rotary encoders,
 10k linear slide pot, tactile buttons, LEDs + 330 ohm resistors, breadboard.
 Optional later: SSD1306 I2C OLED.
-Zigbee coordinator USB dongle (model not yet chosen; see `docs/PROGRESS.md`).
+Zigbee coordinator USB dongle (Sonoff ZBDongle-P or -E; confirm the exact model
+on arrival), USB 2.0 extension cable for it, powered USB-C hub (the Deck has
+one USB-C port). Full list with prices: Google Sheet
+`hue_controller_hardware_list` (owner's Drive).
 
 ## Repo layout
 
@@ -65,8 +68,6 @@ huectl/
   firmware/    Rust, Embassy, target thumbv6m-none-eabi (OUTSIDE the main workspace)
   driver/      C kernel module, Makefile, dkms.conf
   daemon/      Rust, tokio
-  hue-client/  Rust lib: Hue Bridge CLIP v2 client. SUPERSEDED by the
-               Zigbee route; kept for reference until the MQTT client exists
   docs/        PROGRESS.md, report descriptor spec, pin map
   tools/       udev rules, systemd unit, test scripts
 ```

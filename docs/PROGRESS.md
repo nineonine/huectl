@@ -4,7 +4,7 @@ Update this file at the end of every work block. It is also what gets pasted
 into design discussions, so keep it accurate and short.
 
 **Current phase:** 0 (setup)
-**Hardware arrived:** no (Zigbee dongle not bought yet)
+**Hardware arrived:** no. Ordered 2026-10-06: Pico H x2, Debug Probe, breadboard kit, encoders, slide pot, buttons, LEDs, resistors, Zigbee dongle, USB extension cable, powered USB-C hub, Hue bulb (list: Google Sheet `hue_controller_hardware_list`)
 **Last updated:** 2026-10-06
 
 ## Phase overview
@@ -38,7 +38,7 @@ into design discussions, so keep it accurate and short.
 
 ## Phase 1 preview (no hardware needed)
 
-- [x] ~~`hue-client` crate~~ (Hue Bridge client, 7 tests). SUPERSEDED by the Zigbee route (decision 2026-10-06); kept for reference until the MQTT client exists, then delete.
+- [x] ~~`hue-client` crate~~ (Hue Bridge client). Deleted 2026-10-06 after the switch to Zigbee; still in git history at `59a2089`.
 - [ ] Toy daemon: fake-pico events (evdev) -> MQTT `zigbee2mqtt/<name>/set`, ~100 ms coalescing, encoder -> `brightness_step`. Testable before the dongle with `mosquitto_sub`.
 - [ ] Config file loading (MQTT broker, target light/group name)
 
@@ -76,7 +76,7 @@ into design discussions, so keep it accurate and short.
 - Slide pot "pickup" behavior: ignore until it crosses the bulb value, or jump?
 - What does each control do? (Encoder 1 = brightness; push = on/off; second encoder? slider = color temperature; buttons = scenes?)
 - Control a single bulb, a room/group, or switchable targets?
-- Which Zigbee dongle? Candidates: Sonoff ZBDongle-P (CC2652P, longest track record in zigbee2mqtt) or ZBDongle-E (EFR32MG21). Also needed: short USB extension cable, powered USB-C hub (Deck has one port).
+- Which Zigbee dongle exactly was ordered (ZBDongle-P = zigbee2mqtt adapter `zstack`, ZBDongle-E = `ember`)? Confirm on arrival; it sets the zigbee2mqtt config.
 - Which bulbs, how many? Bluetooth-capable (easier factory reset via Hue BT app)?
 - One bulb or a zigbee2mqtt group as the default target?
 - Pin assignments: decide once parts arrive; record in `docs/pinmap.md`
