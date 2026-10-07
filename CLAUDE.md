@@ -1,7 +1,8 @@
 # huectl
 
 A hardware controller for Philips Hue bulbs on Linux. A Raspberry Pi Pico
-(RP2040) with an encoder, slide pot, buttons and LEDs talks USB HID to a
+(RP2040) with three encoders (brightness, hue, saturation), a slide pot,
+buttons, LEDs and a small color display talks USB HID to a
 custom C kernel driver, which exposes standard input and LED interfaces. A
 Rust daemon turns those into Zigbee commands via zigbee2mqtt and a USB
 Zigbee coordinator dongle. No Hue Bridge.
@@ -17,7 +18,7 @@ update it at the end of every work block.
 
 ```
 Pico (Rust, Embassy firmware)
-  -> USB HID (input reports up, output reports down)
+  -> USB HID (input reports up; output reports down: LEDs, display values)
   -> custom C hid_driver kernel module
        |- input_dev     -> /dev/input/eventN
        '- led_classdev  -> /sys/class/leds/huectl::*
@@ -27,7 +28,8 @@ Pico (Rust, Embassy firmware)
 ```
 
 Division of responsibility:
-- **Firmware:** dumb. Debounce, filter, build reports.
+- **Firmware:** dumb. Debounce, filter, build reports, draw the display
+  from values it is sent (it never computes them).
 - **Kernel driver:** thin. Parse reports, expose standard interfaces.
 - **Daemon:** smart. Mapping, rate limiting, policy, light/Zigbee knowledge.
 - No light/Zigbee knowledge ever goes in the firmware or kernel.
@@ -52,9 +54,9 @@ Division of responsibility:
 - Hardware may not have arrived yet. Check `docs/PROGRESS.md`.
 
 ### Hardware
-Pico H x2 (RP2040), Raspberry Pi Debug Probe (SWD), KY-040 rotary encoders,
-10k linear slide pot, tactile buttons, LEDs + 330 ohm resistors, breadboard.
-Optional later: SSD1306 I2C OLED.
+Pico H (RP2040; second board as a spare is undecided), Raspberry Pi Debug Probe (SWD), KY-040 rotary encoders
+(5-pack; 3 used), 10k linear slide pot, tactile buttons, LEDs + 220-330 ohm
+resistors, breadboard, ST7789 240x240 SPI color display (1.3-1.54").
 Zigbee coordinator USB dongle (Sonoff ZBDongle-P or -E; confirm the exact model
 on arrival), USB 2.0 extension cable for it, powered USB-C hub (the Deck has
 one USB-C port). Full list with prices: Google Sheet
@@ -79,7 +81,7 @@ out of the main Cargo workspace (or give it its own target config).
 
 | Layer | Language | Key pieces |
 |---|---|---|
-| Firmware | Rust | `embassy-rp`, `embassy-usb`, `embassy-executor`, `embassy-sync`, `defmt`, `defmt-rtt`, `flip-link`; `probe-rs` and `elf2uf2-rs` for flashing |
+| Firmware | Rust | `embassy-rp`, `embassy-usb`, `embassy-executor`, `embassy-sync`, `defmt`, `defmt-rtt`, `flip-link`; `probe-rs` and `elf2uf2-rs` for flashing; display: `embedded-graphics` + an ST7789 driver (e.g. `mipidsi`, to be checked) |
 | Kernel driver | C | `struct hid_driver`, input subsystem, LED class |
 | Daemon | Rust | `tokio`, `evdev`, `rumqttc` (MQTT), `serde`, `serde_json`, `toml`, `tracing`, `sd-notify` |
 | Light control | (external) | `zigbee2mqtt` + `mosquitto` in the `dev` container, USB Zigbee coordinator |
@@ -105,6 +107,15 @@ out of the main Cargo workspace (or give it its own target config).
    coordinator dongle on the Deck, via zigbee2mqtt; the daemon speaks MQTT.
    Accepted trade-offs: the bulbs leave the Hue app (no app, voice or
    schedules), and the Deck must be on to control them.
+9. **Color is set with two encoders:** one for hue (wraps around 0-360,
+   since encoders have no end stop), one for saturation. A third encoder
+   does brightness. The daemon turns detents into zigbee2mqtt hue/saturation
+   steps. A finger-drag control (round trackpad) is a possible later upgrade.
+10. **ST7789 color display** shows the values being tuned and a swatch of the
+    current color. The daemon is the source of truth (from zigbee2mqtt's
+    state messages) and sends values in a vendor output report; the firmware
+    only draws them. How the daemon reaches that report (hidraw or a driver
+    sysfs attribute) is still open.
 
 ## Constraints and gotchas
 
@@ -134,14 +145,21 @@ out of the main Cargo workspace (or give it its own target config).
 
 ## zigbee2mqtt essentials (VERIFY against the docs and real messages)
 
-These were written from memory. Confirm every topic and payload against the
-zigbee2mqtt docs and `mosquitto_sub -v -t 'zigbee2mqtt/#'` before relying
-on them.
+Lines marked (docs) were checked against the zigbee2mqtt device page for a
+Hue color bulb (9290022166) on 2026-10-06; the rest are from memory. Confirm
+everything against `mosquitto_sub -v -t 'zigbee2mqtt/#'` once a bulb is
+paired.
 
 - Set state: publish to `zigbee2mqtt/<friendly_name>/set`, e.g.
   `{"state": "ON", "brightness": 0..254, "color_temp": <mireds>, "transition": 0.2}`.
-- Relative dimming: `{"brightness_step": N}` (signed), a natural fit for
-  encoder detents.
+  (docs: brightness 0-254, color_temp 153-500 mired, higher = warmer)
+- Color, two forms (docs): `{"color": {"hue": 0..360, "saturation": 0..100}}`,
+  or CIE `{"color": {"x": X, "y": Y}}` (what the Hue app's picker uses).
+- Relative changes (docs): `brightness_step`, `hue_step`, `color_temp_step`
+  (signed), and `*_move` (keep changing at N units/s until a 0 or stop).
+  Note: brightness move/step won't turn an off light on; the `_onoff`
+  variants do.
+- `transition` (docs): fade time in seconds; keeps coalesced updates smooth.
 - State/feedback: zigbee2mqtt publishes each device's state to
   `zigbee2mqtt/<friendly_name>` (use it for LEDs and slider pickup).
 - Device list: retained message on `zigbee2mqtt/bridge/devices`.

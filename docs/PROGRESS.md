@@ -4,7 +4,7 @@ Update this file at the end of every work block. It is also what gets pasted
 into design discussions, so keep it accurate and short.
 
 **Current phase:** 0 (setup)
-**Hardware arrived:** no. Ordered 2026-10-06: Pico H x2, Debug Probe, breadboard kit, encoders, slide pot, buttons, LEDs, resistors, Zigbee dongle, USB extension cable, powered USB-C hub, Hue bulb (list: Google Sheet `hue_controller_hardware_list`)
+**Hardware arrived:** no. Being ordered 2026-10-06: Pico H (spare undecided; a Pico starter kit may replace breadboard/jumpers/cable/LEDs/buttons/resistors), Debug Probe, KY-040 5-pack, slide pot, ST7789 color display, Zigbee dongle, USB extension cable, powered USB-C hub, Hue bulb. Source of truth: Google Sheet `hue_controller_hardware_list`
 **Last updated:** 2026-10-06
 
 ## Phase overview
@@ -69,17 +69,27 @@ into design discussions, so keep it accurate and short.
 | 2026-10-06 | **No Hue Bridge: USB Zigbee dongle on the Deck + zigbee2mqtt; daemon speaks MQTT** (CLAUDE.md decision 8) | Owner's choice. Pico/HID/driver unchanged. Trade-offs accepted: bulbs leave the Hue app; Deck must be on to control them |
 | 2026-10-05 | Draft descriptor uses Generic Desktop / Multi-axis Controller app collection | Only some application usages get hid-input mapping; this one gives `BTN_0..` buttons (not mouse/joystick ones) |
 | 2026-10-05 | Driver pins event codes: `BTN_0..3`, `REL_DIAL`, `ABS_MISC`; unmapped usages ignored | Contract with the daemon lives in our code, not hid-input guesses; `BTN_*` not `KEY_*` so desktops don't treat it as a keyboard |
+| 2026-10-06 | Color via two encoders: hue (wraps 0-360) + saturation; third encoder = brightness (CLAUDE.md decision 9) | Uses parts already in the plan; maps 1:1 to zigbee2mqtt `hue_step` / saturation. Owner picked this over a round trackpad or touchscreen for now |
+| 2026-10-06 | ST7789 240x240 color display shows tuned values + color swatch; daemon sends values, firmware draws (decision 10) | Color swatch beats mono SSD1306 for picking colors; keeps firmware free of Hue knowledge |
 | 2026-10-05 | `cargo install` tools only inside `dev` | Linked against Debian glibc 2.36, they also run on the newer-glibc host |
 
 ## Open questions
 
 - Slide pot "pickup" behavior: ignore until it crosses the bulb value, or jump?
-- What does each control do? (Encoder 1 = brightness; push = on/off; second encoder? slider = color temperature; buttons = scenes?)
+- What does each control do? Decided: encoders = brightness, hue, saturation. Still open: encoder pushes (on/off? reset?), slider (color temperature?), buttons 2-4 (presets?), LEDs (how many, what they show).
+- Display report: how does the daemon send it? `/dev/hidraw` (no driver code) or a driver sysfs attribute (more kernel practice)? And its layout (mode + hue/sat/bri/color-temp values).
+- Report descriptor must grow: 3 relative encoder axes instead of 1 (e.g. Dial + 2 more usages), 3 encoder push buttons, and the display output report. Update `fake-pico` and the driver mapping together.
 - Control a single bulb, a room/group, or switchable targets?
 - Which Zigbee dongle exactly was ordered (ZBDongle-P = zigbee2mqtt adapter `zstack`, ZBDongle-E = `ember`)? Confirm on arrival; it sets the zigbee2mqtt config.
 - Which bulbs, how many? Bluetooth-capable (easier factory reset via Hue BT app)?
 - One bulb or a zigbee2mqtt group as the default target?
 - Pin assignments: decide once parts arrive; record in `docs/pinmap.md`
+
+## Future ideas (not planned yet)
+
+- Finger-drag color control: 40 mm round capacitive trackpad (Cirque GlidePoint Circle, Pinnacle chip, I2C/SPI, absolute X/Y). Angle = hue, radius = saturation. Needs a ribbon-cable (FFC) adapter for the breadboard; connector details unconfirmed.
+- Touchscreen (2.4-2.8" SPI TFT + touch controller) showing a color wheel, closest to the Hue app. Most firmware work.
+- Thumb joystick: rejected for color (springs back to center, can't hold a value).
 
 ## Pin map
 
