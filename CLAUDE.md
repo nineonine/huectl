@@ -3,7 +3,8 @@
 A hardware controller for Philips Hue bulbs on Linux. A Raspberry Pi Pico
 (RP2040) with an encoder, slide pot, buttons and LEDs talks USB HID to a
 custom C kernel driver, which exposes standard input and LED interfaces. A
-Rust daemon turns those into Hue Bridge API calls.
+Rust daemon turns those into Zigbee commands via zigbee2mqtt and a USB
+Zigbee coordinator dongle. No Hue Bridge.
 
 The owner is new to hardware and wants to learn by building each layer.
 Explain decisions briefly as you go, keep changes small and reviewable, and
@@ -21,14 +22,15 @@ Pico (Rust, Embassy firmware)
        |- input_dev     -> /dev/input/eventN
        '- led_classdev  -> /sys/class/leds/huectl::*
   -> Rust tokio daemon (evdev in, sysfs out)
-  -> Hue Bridge CLIP v2 HTTPS API (+ SSE event stream) -> Zigbee -> bulbs
+  -> MQTT (mosquitto) -> zigbee2mqtt -> USB Zigbee coordinator dongle
+  -> Zigbee -> Hue bulbs
 ```
 
 Division of responsibility:
 - **Firmware:** dumb. Debounce, filter, build reports.
 - **Kernel driver:** thin. Parse reports, expose standard interfaces.
-- **Daemon:** smart. Mapping, rate limiting, policy, Hue knowledge.
-- No Hue knowledge ever goes in the kernel.
+- **Daemon:** smart. Mapping, rate limiting, policy, light/Zigbee knowledge.
+- No light/Zigbee knowledge ever goes in the firmware or kernel.
 
 ## Environment (read carefully)
 
@@ -44,12 +46,16 @@ Division of responsibility:
   device is passed through to the VM.
 - Pass the Pico to the VM by **host bus/port**, not VID/PID, because BOOTSEL
   mode changes the USB ID.
+- zigbee2mqtt and mosquitto run in the `dev` container. The Zigbee dongle
+  stays on the host (not passed to the VM); the container sees it as a
+  serial device.
 - Hardware may not have arrived yet. Check `docs/PROGRESS.md`.
 
 ### Hardware
 Pico H x2 (RP2040), Raspberry Pi Debug Probe (SWD), KY-040 rotary encoders,
 10k linear slide pot, tactile buttons, LEDs + 330 ohm resistors, breadboard.
 Optional later: SSD1306 I2C OLED.
+Zigbee coordinator USB dongle (model not yet chosen; see `docs/PROGRESS.md`).
 
 ## Repo layout
 
@@ -59,7 +65,8 @@ huectl/
   firmware/    Rust, Embassy, target thumbv6m-none-eabi (OUTSIDE the main workspace)
   driver/      C kernel module, Makefile, dkms.conf
   daemon/      Rust, tokio
-  hue-client/  Rust lib: CLIP v2 types and client
+  hue-client/  Rust lib: Hue Bridge CLIP v2 client. SUPERSEDED by the
+               Zigbee route; kept for reference until the MQTT client exists
   docs/        PROGRESS.md, report descriptor spec, pin map
   tools/       udev rules, systemd unit, test scripts
 ```
@@ -73,7 +80,8 @@ out of the main Cargo workspace (or give it its own target config).
 |---|---|---|
 | Firmware | Rust | `embassy-rp`, `embassy-usb`, `embassy-executor`, `embassy-sync`, `defmt`, `defmt-rtt`, `flip-link`; `probe-rs` and `elf2uf2-rs` for flashing |
 | Kernel driver | C | `struct hid_driver`, input subsystem, LED class |
-| Daemon | Rust | `tokio`, `evdev`, `reqwest` (rustls), `serde`, `toml`, `tracing`, `mdns-sd`, `sd-notify` |
+| Daemon | Rust | `tokio`, `evdev`, `rumqttc` (MQTT), `serde`, `serde_json`, `toml`, `tracing`, `sd-notify` |
+| Light control | (external) | `zigbee2mqtt` + `mosquitto` in the `dev` container, USB Zigbee coordinator |
 | Fake device | Rust | `/dev/uhid` emulator for testing the driver without hardware |
 
 ## Design decisions already made (do not re-litigate without asking)
@@ -92,15 +100,28 @@ out of the main Cargo workspace (or give it its own target config).
 6. Develop with VID `0x1209` / PID `0x0001` (pid.codes test PID).
 7. The driver's `id_table` must match the VID/PID, otherwise `hid-generic`
    binds first.
+8. **No Hue Bridge.** Bulbs are controlled over Zigbee through a USB
+   coordinator dongle on the Deck, via zigbee2mqtt; the daemon speaks MQTT.
+   Accepted trade-offs: the bulbs leave the Hue app (no app, voice or
+   schedules), and the Deck must be on to control them.
 
 ## Constraints and gotchas
 
-- **Hue Bridge rate limit:** roughly 10 light commands/sec (less for group
-  commands). Coalesce encoder input into one command per ~100 ms.
-- **Bridge TLS:** self-signed certificate. Pin it. Never disable verification
-  in final code (acceptable only in throwaway shell experiments with `curl -k`).
-- **Hue application key:** store in a config file outside the repo (e.g.
-  `~/.config/huectl/config.toml`). Never commit it. Keep it out of logs.
+- **Zigbee throughput is limited.** Coalesce encoder input into one command
+  per ~100 ms. For several bulbs prefer a Zigbee group (one multicast) over
+  per-bulb commands.
+- **2.4 GHz interference:** USB 3 ports and Wi-Fi disturb Zigbee. Put the
+  dongle on a short USB extension cable, away from the Deck and USB 3 hubs.
+- **The Deck has one USB-C port.** Pico, Debug Probe and dongle together
+  need a (powered) USB hub or dock.
+- **Serial access:** the dongle appears as `/dev/ttyUSB*` or `/dev/ttyACM*`
+  on the host; access needs a udev rule or group membership (needs `sudo`:
+  ask first).
+- **Pairing Hue bulbs:** bulbs previously paired to a bridge must be factory
+  reset first (zigbee2mqtt Touchlink reset with the dongle ~10 cm from the
+  bulb, or the Hue Bluetooth app).
+- **Secrets:** the zigbee2mqtt network key lives in its own data dir outside
+  the repo. Never commit it.
 - **Pico GPIOs are 3.3 V only**, not 5 V tolerant. Power modules from 3V3.
 - **Encoders bounce.** Debounce in firmware. Slide pot ADC is noisy: smooth it
   (moving average or hysteresis).
@@ -110,19 +131,22 @@ out of the main Cargo workspace (or give it its own target config).
 - **Secure Boot** (inside the VM) may require module signing; disable it for
   the dev VM if needed.
 
-## Hue API essentials (VERIFY against real bridge responses)
+## zigbee2mqtt essentials (VERIFY against the docs and real messages)
 
-These were written from memory. Confirm every endpoint and payload shape
-against actual responses and the Hue developer docs before relying on them.
+These were written from memory. Confirm every topic and payload against the
+zigbee2mqtt docs and `mosquitto_sub -v -t 'zigbee2mqtt/#'` before relying
+on them.
 
-- Base: `https://<bridge-ip>/clip/v2/...`, header `hue-application-key: <key>`
-- Pairing: press the bridge link button, then POST to `/api` within ~30 s to
-  obtain an application key.
-- Lights: GET `/clip/v2/resource/light`; change state with PUT
-  `/clip/v2/resource/light/<id>` (for example on/off and `dimming.brightness`).
-- Events (SSE): `/eventstream/clip/v2`. Needed for feedback and to notice
-  changes made from the Hue app.
-- Other resources of interest: `grouped_light`, `scene`.
+- Set state: publish to `zigbee2mqtt/<friendly_name>/set`, e.g.
+  `{"state": "ON", "brightness": 0..254, "color_temp": <mireds>, "transition": 0.2}`.
+- Relative dimming: `{"brightness_step": N}` (signed), a natural fit for
+  encoder detents.
+- State/feedback: zigbee2mqtt publishes each device's state to
+  `zigbee2mqtt/<friendly_name>` (use it for LEDs and slider pickup).
+- Device list: retained message on `zigbee2mqtt/bridge/devices`.
+- Pairing: `zigbee2mqtt/bridge/request/permit_join`; Touchlink factory reset
+  via `zigbee2mqtt/bridge/request/touchlink/factory_reset`.
+- Groups: defined in zigbee2mqtt, addressed like devices by friendly name.
 
 ## Working agreements
 
@@ -130,8 +154,8 @@ against actual responses and the Hue developer docs before relying on them.
   the repo, the `dev` container, or the VM.
 - Commit small, one concern per commit, with clear messages.
 - After each step, say how to verify it ("done when ...").
-- Don't guess hardware details (pins, addresses, bridge IP, keys). Ask.
-- Prefer tests where practical, especially in `hue-client`.
+- Don't guess hardware details (pins, dongle model/port, bulb models, keys). Ask.
+- Prefer tests where practical, especially in the daemon's MQTT layer.
 - If something fails, show the actual error and explain it; don't paper over it.
 - When a design decision is made, record it in `docs/PROGRESS.md`.
 
@@ -142,4 +166,4 @@ against actual responses and the Hue developer docs before relying on them.
 - Embassy: `embassy-rs/embassy`, `examples/rp`
 - Tools: `hid-tools` (`hid-recorder`, `hid-replay`), `evtest`, `usbmon` + Wireshark
 - Reading: "USB in a NutShell" (Beyond Logic), HID spec and Usage Tables
-  (usb.org), Bootlin kernel/driver slides, Hue developer portal
+  (usb.org), Bootlin kernel/driver slides, zigbee2mqtt docs (zigbee2mqtt.io)

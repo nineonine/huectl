@@ -4,15 +4,15 @@ Update this file at the end of every work block. It is also what gets pasted
 into design discussions, so keep it accurate and short.
 
 **Current phase:** 0 (setup)
-**Hardware arrived:** no
-**Last updated:** 2026-10-05
+**Hardware arrived:** no (Zigbee dongle not bought yet)
+**Last updated:** 2026-10-06
 
 ## Phase overview
 
 | Phase | Goal | Status |
 |---|---|---|
-| 0 | Toolchain, kernel dev VM + hello module, Hue API via curl | in progress |
-| 1 | `hue-client` crate + toy daemon driven by keyboard events | not started |
+| 0 | Toolchain, kernel dev VM + hello module, Zigbee via MQTT | in progress |
+| 1 | Toy daemon: evdev (fake-pico) -> MQTT, coalescing; then real bulbs via zigbee2mqtt | not started |
 | 2 | Firmware: Pico enumerates, one button reaches `evtest` (stock HID) | not started |
 | 3 | Custom report descriptor + C `hid_driver`; test on `uhid` fake, then real board | not started |
 | 4 | Encoder, slide pot, debouncing, smoothing | not started |
@@ -25,8 +25,8 @@ into design discussions, so keep it accurate and short.
   *Done when:* `tools/prep-deck.sh` exits 0.
 - [x] **Step 2: Dev container.** (Rust 1.99, probe-rs 0.32.0, elf2uf2-rs, flip-link 0.1.12; tools also run on host) `distrobox create -n dev -i debian:12`; inside it install `build-essential git curl pkg-config libssl-dev libudev-dev`, rustup, `rustup target add thumbv6m-none-eabi`, `cargo install probe-rs-tools elf2uf2-rs flip-link`.
   *Done when:* `cargo --version` and `probe-rs --version` work inside `dev`.
-- [ ] **Step 3: Hue Bridge via curl.** (Blocked: no bridge yet.) Find bridge IP, press link button and request an application key, list lights, toggle one, change brightness.
-  *Done when:* a bulb can be switched and dimmed from a shell. Key stored outside the repo.
+- [ ] **Step 3: Zigbee via MQTT.** (Blocked: dongle not bought.) Install mosquitto + zigbee2mqtt in `dev`, give the container access to the dongle, factory-reset and pair one bulb, toggle and dim it with `mosquitto_pub`.
+  *Done when:* a bulb can be switched and dimmed from a shell via MQTT. (Replaces the old "Hue Bridge via curl" step.)
 - [x] **Step 4: Kernel dev VM.** Scripted: `distrobox enter dev -- tools/vm.sh create|start|ssh|stop|snapshot|restore|snapshots`. Debian 12 cloud image + cloud-init (no installer), files in `vm/` (gitignored), snapshot `clean`. Kernel 6.1.0-53-amd64, SeaBIOS (no Secure Boot). QEMU/KVM Debian 12 (4 GB RAM, 4 vCPU, 30 GB qcow2), SSH on host port 2222, install `build-essential linux-headers-$(uname -r) git usbutils evtest`. Take a clean snapshot with the VM powered off.
   *Done when:* SSH works and `/lib/modules/$(uname -r)/build` exists.
 - [x] **Step 5: Hello-world module.** `driver/hello.c` loads/unloads in the VM; `Dual MIT/GPL` license. `hello.c` with init/exit `pr_info`, `MODULE_LICENSE("GPL")`, Makefile with `obj-m`. `make`, `insmod`, check `dmesg`, `rmmod`.
@@ -38,10 +38,9 @@ into design discussions, so keep it accurate and short.
 
 ## Phase 1 preview (no hardware needed)
 
-- [~] `hue-client` crate: list lights, set on/off and brightness, tested against a wiremock fake (7 tests). Still to do: discovery, pairing, and checking shapes against a real bridge (replace `tests/fixtures/lights.json` with a capture).
-- [ ] Pinned-certificate handling for the bridge's self-signed cert
-- [ ] Toy daemon: keyboard events (evdev) -> Hue commands, with ~100 ms coalescing
-- [ ] Config file loading (bridge IP, application key path)
+- [x] ~~`hue-client` crate~~ (Hue Bridge client, 7 tests). SUPERSEDED by the Zigbee route (decision 2026-10-06); kept for reference until the MQTT client exists, then delete.
+- [ ] Toy daemon: fake-pico events (evdev) -> MQTT `zigbee2mqtt/<name>/set`, ~100 ms coalescing, encoder -> `brightness_step`. Testable before the dongle with `mosquitto_sub`.
+- [ ] Config file loading (MQTT broker, target light/group name)
 
 ## Ahead of Phase 3 (no hardware needed)
 
@@ -66,7 +65,8 @@ into design discussions, so keep it accurate and short.
 | 2026-10-05 | VM from Debian cloud image + cloud-init NoCloud seed over HTTP | Scriptable, reproducible, no installer clicking |
 | 2026-10-05 | VM files live in repo `vm/` (gitignored), dedicated SSH key there | Keeps everything inside the repo, nothing in `~/.ssh` |
 | 2026-10-05 | Kernel code licensed `Dual MIT/GPL` | Repo is MIT; kernel needs GPL-compatible to use GPL-only symbols |
-| 2026-10-05 | `hue-client::Bridge` takes a caller-built `reqwest::Client` | TLS pinning decided in one place; tests use plain HTTP |
+| 2026-10-05 | `hue-client::Bridge` takes a caller-built `reqwest::Client` | TLS pinning decided in one place; tests use plain HTTP (superseded) |
+| 2026-10-06 | **No Hue Bridge: USB Zigbee dongle on the Deck + zigbee2mqtt; daemon speaks MQTT** (CLAUDE.md decision 8) | Owner's choice. Pico/HID/driver unchanged. Trade-offs accepted: bulbs leave the Hue app; Deck must be on to control them |
 | 2026-10-05 | Draft descriptor uses Generic Desktop / Multi-axis Controller app collection | Only some application usages get hid-input mapping; this one gives `BTN_0..` buttons (not mouse/joystick ones) |
 | 2026-10-05 | Driver pins event codes: `BTN_0..3`, `REL_DIAL`, `ABS_MISC`; unmapped usages ignored | Contract with the daemon lives in our code, not hid-input guesses; `BTN_*` not `KEY_*` so desktops don't treat it as a keyboard |
 | 2026-10-05 | `cargo install` tools only inside `dev` | Linked against Debian glibc 2.36, they also run on the newer-glibc host |
@@ -76,7 +76,9 @@ into design discussions, so keep it accurate and short.
 - Slide pot "pickup" behavior: ignore until it crosses the bulb value, or jump?
 - What does each control do? (Encoder 1 = brightness; push = on/off; second encoder? slider = color temperature; buttons = scenes?)
 - Control a single bulb, a room/group, or switchable targets?
-- Bridge-less Zigbee route: out of scope for now (revisit only if wanted)
+- Which Zigbee dongle? Candidates: Sonoff ZBDongle-P (CC2652P, longest track record in zigbee2mqtt) or ZBDongle-E (EFR32MG21). Also needed: short USB extension cable, powered USB-C hub (Deck has one port).
+- Which bulbs, how many? Bluetooth-capable (easier factory reset via Hue BT app)?
+- One bulb or a zigbee2mqtt group as the default target?
 - Pin assignments: decide once parts arrive; record in `docs/pinmap.md`
 
 ## Pin map
