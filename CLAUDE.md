@@ -54,7 +54,7 @@ Division of responsibility:
 - Hardware may not have arrived yet. Check `docs/PROGRESS.md`.
 
 ### Hardware
-Pico H (RP2040; second board as a spare is undecided), Raspberry Pi Debug Probe (SWD), KY-040 rotary encoders
+Pico H x2 (RP2040; starter kit board + a spare), Raspberry Pi Debug Probe (SWD), KY-040 rotary encoders
 (5-pack; 3 used), 10k linear slide pot, tactile buttons, LEDs + 220-330 ohm
 resistors, breadboard, ST7789 240x240 SPI color display (1.3-1.54").
 Zigbee coordinator USB dongle (Sonoff ZBDongle-P or -E; confirm the exact model

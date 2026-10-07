@@ -4,7 +4,7 @@ Update this file at the end of every work block. It is also what gets pasted
 into design discussions, so keep it accurate and short.
 
 **Current phase:** 0 (setup)
-**Hardware arrived:** no. Being ordered 2026-10-06: CanaKit Pico H Starter Kit (Pico H, breadboard, jumpers, micro-USB cable, LEDs, buttons, resistors), Debug Probe, KY-040 5-pack, ST7789 color display, Zigbee dongle, USB extension cable, multimeter. Undecided: spare Pico H, slide pot. Already owned (not ordered): USB-C hub, Hue bulb(s). Source of truth: Google Sheet `hue_controller_hardware_list`
+**Hardware arrived:** no. Being ordered 2026-10-06: CanaKit Pico H Starter Kit (Pico H, breadboard, jumpers, micro-USB cable, LEDs, buttons, resistors), spare Pico H, Debug Probe, KY-040 5-pack, slide pot, ST7789 color display, Zigbee dongle, USB extension cable, multimeter. Already owned (not ordered): USB-C hub, Hue bulb(s). Source of truth: Google Sheet `hue_controller_hardware_list`
 **Last updated:** 2026-10-06
 
 ## Phase overview
@@ -74,11 +74,13 @@ into design discussions, so keep it accurate and short.
 | 2026-10-06 | ST7789 240x240 color display shows tuned values + color swatch; daemon sends values, firmware draws (decision 10) | Color swatch beats mono SSD1306 for picking colors; keeps firmware free of Hue knowledge |
 | 2026-10-06 | Knobs use HID Rx/Ry/Rz -> `REL_RX/RY/RZ` (replaces `REL_DIAL` from 2026-10-05); 6 buttons `BTN_0..5` | Three identical knobs as one code family; nothing consumed `REL_DIAL` yet |
 | 2026-10-06 | Display report 3 carries the full state incl. a daemon-computed RGB swatch | Idempotent (decision 3); firmware never converts colors |
+| 2026-10-06 | Keep the slide pot; its role is open | Only analog part: ADC + smoothing practice (Phase 4) for $4. Knobs + display already cover the core functions, so it isn't required |
+| 2026-10-06 | Buy one spare Pico H besides the starter kit's board | Cheap insurance against wiring mistakes (3.3 V-only GPIOs) |
 | 2026-10-05 | `cargo install` tools only inside `dev` | Linked against Debian glibc 2.36, they also run on the newer-glibc host |
 
 ## Open questions
 
-- Slide pot "pickup" behavior: ignore until it crosses the bulb value, or jump?
+- Slide pot: what does it control (color temperature? a fixed "warmth"? nothing yet)? Pickup behavior (ignore until it crosses the bulb value, or jump) only matters if it controls something the bulb can also change elsewhere.
 - What does each control do? Decided: encoders = brightness, hue, saturation. Still open: encoder pushes (on/off? reset?), slider (color temperature?), buttons 2-4 (presets?), LEDs (how many, what they show).
 - Display report transport: `/dev/hidraw` (verified working in the VM, no driver code) or a driver sysfs attribute (more kernel practice)? Layout is decided (`docs/report-descriptor.md`).
 - Control a single bulb, a room/group, or switchable targets?
