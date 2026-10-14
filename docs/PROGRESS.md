@@ -5,7 +5,7 @@ into design discussions, so keep it accurate and short.
 
 **Current phase:** 0 (setup)
 **Hardware arrived:** no. Everything is ordered. CanaKit (2026-10-06): Pico H Starter Kit (Pico H, breadboard, micro-USB cable, 32 jumpers, LEDs, 2 push buttons, 220 ohm + 10k resistors), spare Pico H, Debug Probe. Universal Solder (2026-10-08): 120 DuPont jumpers (incl. 40 F-M), 10 tactile buttons (long leads), 1.3" ST7789 display. Amazon.ca (2026-10-08): KY-040 5-pack, slide pot, Sonoff Zigbee dongle (model -P/-E to confirm on arrival), USB extension cable, multimeter. Already owned: USB-C hub, Hue bulb(s). Details and prices: Google Sheet `hue_controller_hardware_list`
-**Last updated:** 2026-10-06
+**Last updated:** 2026-10-13
 
 ## Phase overview
 
@@ -25,7 +25,7 @@ into design discussions, so keep it accurate and short.
   *Done when:* `tools/prep-deck.sh` exits 0.
 - [x] **Step 2: Dev container.** (Rust 1.99, probe-rs 0.32.0, elf2uf2-rs, flip-link 0.1.12; tools also run on host) `distrobox create -n dev -i debian:12`; inside it install `build-essential git curl pkg-config libssl-dev libudev-dev`, rustup, `rustup target add thumbv6m-none-eabi`, `cargo install probe-rs-tools elf2uf2-rs flip-link`.
   *Done when:* `cargo --version` and `probe-rs --version` work inside `dev`.
-- [ ] **Step 3: Zigbee via MQTT.** (Blocked: dongle not bought.) Install mosquitto + zigbee2mqtt in `dev`, give the container access to the dongle, factory-reset and pair one bulb, toggle and dim it with `mosquitto_pub`.
+- [ ] **Step 3: Zigbee via MQTT.** (Blocked: dongle ordered, not arrived.) Install mosquitto + zigbee2mqtt in `dev`, give the container access to the dongle, factory-reset and pair one bulb, toggle and dim it with `mosquitto_pub`.
   *Done when:* a bulb can be switched and dimmed from a shell via MQTT. (Replaces the old "Hue Bridge via curl" step.)
 - [x] **Step 4: Kernel dev VM.** Scripted: `distrobox enter dev -- tools/vm.sh create|start|ssh|stop|snapshot|restore|snapshots`. Debian 12 cloud image + cloud-init (no installer), files in `vm/` (gitignored), snapshot `clean`. Kernel 6.1.0-53-amd64, SeaBIOS (no Secure Boot). QEMU/KVM Debian 12 (4 GB RAM, 4 vCPU, 30 GB qcow2), SSH on host port 2222, install `build-essential linux-headers-$(uname -r) git usbutils evtest`. Take a clean snapshot with the VM powered off.
   *Done when:* SSH works and `/lib/modules/$(uname -r)/build` exists.
@@ -33,7 +33,7 @@ into design discussions, so keep it accurate and short.
   *Done when:* load and unload messages appear in `dmesg`. Keep `dmesg -w` open in a second SSH session.
 - [~] **Step 6: Firmware toolchain smoke test.** Build half done: `blinky` builds with `cargo +stable build --release --bin blinky` (`+stable` skips Embassy's pinned 1.97 + 14 targets) and converts to a 31 KB `.uf2`. Flashing waits for the board. Clone `embassy-rs/embassy`, build `examples/rp` `blinky` in release mode. Flash and see the LED blink once the board arrives (BOOTSEL + `elf2uf2-rs -d`).
   *Done when:* build succeeds now; LED blinks later.
-- [ ] **Step 7: Repo skeleton.** Create the layout from `CLAUDE.md`, `git init`, `.gitignore` for `target/` and `*.ko` build output, commit the hello module under `driver/`. (`git init` + `.gitignore` + hello module done; repo is public (owner OK'd), pushed; origin = `https://github.com/nineonine/huectl` (private); push auth not set up yet.)
+- [x] **Step 7: Repo skeleton.** Create the layout from `CLAUDE.md`, `git init`, `.gitignore` for `target/` and `*.ko` build output, commit the hello module under `driver/`. (Done: origin = `https://github.com/nineonine/huectl`, public (owner OK'd); push from inside `dev`, where `gh` holds the auth.)
   *Done when:* first commit exists.
 
 ## Phase 1 preview (no hardware needed)
@@ -81,7 +81,7 @@ into design discussions, so keep it accurate and short.
 ## Open questions
 
 - Slide pot: what does it control (color temperature? a fixed "warmth"? nothing yet)? Pickup behavior (ignore until it crosses the bulb value, or jump) only matters if it controls something the bulb can also change elsewhere.
-- What does each control do? Decided: encoders = brightness, hue, saturation. Still open: encoder pushes (on/off? reset?), slider (color temperature?), buttons 2-4 (presets?), LEDs (how many, what they show).
+- What does each control do? Decided: encoders = brightness, hue, saturation. Still open: encoder pushes (on/off? reset?), slider (color temperature?), tactile buttons 4-6 (presets?), LEDs (how many, what they show).
 - Display report transport: `/dev/hidraw` (verified working in the VM, no driver code) or a driver sysfs attribute (more kernel practice)? Layout is decided (`docs/report-descriptor.md`).
 - Control a single bulb, a room/group, or switchable targets?
 - Which Zigbee dongle exactly was ordered (ZBDongle-P = zigbee2mqtt adapter `zstack`, ZBDongle-E = `ember`)? Confirm on arrival; it sets the zigbee2mqtt config.
